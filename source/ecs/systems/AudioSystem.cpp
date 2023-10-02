@@ -1,6 +1,7 @@
 
 #include "AudioSystem.h"
 #include "../../generated/PlayerControlled.hpp"
+#include "../../generated/Spawning.hpp"
 
 void AudioSystem::init(EntityEngine *engine)
 {
@@ -31,6 +32,22 @@ void AudioSystem::update(double deltaTime, EntityEngine *room)
 {
     int resumed = 0;
     bool roomActive = !room->entities.empty<LocalPlayer>();
+
+    bool profTalking = false;
+    room->entities.view<SoundSpeaker>().each([&](auto e, SoundSpeaker &speaker)
+    {
+        if (speaker.source && speaker.source->isPlaying())
+        {
+            const std::vector pathParts = splitString(speaker.sound.getLoadedAsset().shortPath, "/");
+            if (pathParts.size() > 0)
+            {
+                if (stringStartsWith(pathParts.back(), "professor"))
+                {
+                    profTalking = true;
+                }
+            }
+        }
+    });
     room->entities.view<SoundSpeaker>().each([&](auto e, SoundSpeaker &speaker) {
 
         if (roomActive && !speaker.paused && speaker.source && speaker.source->isPaused())
@@ -46,6 +63,25 @@ void AudioSystem::update(double deltaTime, EntityEngine *room)
 
             if (!speaker.source && speaker.sound.isSet())
             {
+                const std::vector pathParts = splitString(speaker.sound.getLoadedAsset().shortPath, "/");
+                if (pathParts.size() > 0)
+                {
+                    if (stringStartsWith(pathParts.back(), "professor"))
+                    {
+                        if (!profTalking)
+                        {
+                            profTalking = true;
+                        }
+                        else
+                        {
+                            if (DespawnAfter *despawnAfter = room->entities.try_get<DespawnAfter>(e))
+                            {
+                                despawnAfter->time += deltaTime;
+                            }
+                            return;
+                        }
+                    }
+                }
                 speaker.source = std::make_shared<au::SoundSource>(speaker.sound.get());
                 speaker.source->play();
             }
